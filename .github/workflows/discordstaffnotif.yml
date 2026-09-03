@@ -1,4 +1,5 @@
-name: staffnotif
+```yaml
+name: Discord Commit Notifications
 
 on:
   push:
@@ -8,159 +9,162 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
       - name: Send Discord notification
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          EVENT_JSON: ${{ toJson(github.event) }}
           REPOSITORY: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
           ACTOR: ${{ github.actor }}
           AVATAR_URL: ${{ github.event.sender.avatar_url }}
-          PRIVATE_REPO: ${{ github.event.repository.private }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
 
         run: |
           python3 - <<'PY'
           import json
           import os
+          import subprocess
           import urllib.request
 
-
-          NICKNAMES = {
+          nicknames = {
               "Nikodem6789": "Yuri",
           }
-
-
-          event = json.loads(os.environ["EVENT_JSON"])
 
           webhook = os.environ["DISCORD_WEBHOOK"]
           repository = os.environ["REPOSITORY"]
           branch = os.environ["BRANCH"]
           username = os.environ["ACTOR"]
           avatar = os.environ["AVATAR_URL"]
+          commit_id = os.environ["COMMIT_SHA"]
+          commit_url = os.environ["COMMIT_URL"]
+          timestamp = os.environ["COMMIT_TIMESTAMP"]
+          message = os.environ["COMMIT_MESSAGE"].strip()
 
-          nickname = NICKNAMES.get(username)
+          nickname = nicknames.get(username)
+          name = f"{username} ({nickname})" if nickname else username
 
-          if nickname:
-              display_name = f"{username} ({nickname})"
-          else:
-              display_name = username
-
-          commits = event.get("commits", [])
-
-
-          for commit in commits:
-
-              commit_id = commit["id"]
-              short_id = commit_id[:7]
-
-              message = commit.get("message", "").strip()
-
-              if len(message) > 1000:
-                  message = message[:997] + "..."
-
-              commit_url = commit.get("url", "")
-
-              added = commit.get("added", [])
-              modified = commit.get("modified", [])
-              removed = commit.get("removed", [])
-
-              total_files = len(added) + len(modified) + len(removed)
-
-              files = []
-
-              for file in added:
-                  files.append(f"🟢 `{file}`")
-
-              for file in modified:
-                  files.append(f"🟡 `{file}`")
-
-              for file in removed:
-                  files.append(f"🔴 `{file}`")
-
-              if files:
-                  affected = "\n".join(files[:20])
-
-                  if len(files) > 20:
-                      affected += f"\n...and {len(files) - 20} more"
-              else:
-                  affected = "No files listed."
-
-              # ========================================================
-              # Discord embed
-              # ========================================================
-
-              embed = {
-                  "title": display_name,
-
-                  "description": (
-                      f"**{display_name}** has committed something "
-                      f"to the repository."
-                  ),
-
-                  "color": 15158332,
-
-                  "author": {
-                      "name": username,
-                      "icon_url": avatar
-                  },
-
-                  "fields": [
-                      {
-                          "name": "📝 Commit",
-                          "value": (
-                              f"`{short_id}`\n"
-                              f"{message}"
-                          ),
-                          "inline": False
-                      },
-                      {
-                          "name": "📁 Affected",
-                          "value": (
-                              f"**{total_files}** file(s)\n"
-                              f"🟢 {len(added)} added\n"
-                              f"🟡 {len(modified)} modified\n"
-                              f"🔴 {len(removed)} removed"
-                          ),
-                          "inline": True
-                      },
-                      {
-                          "name": "🌿 Branch",
-                          "value": f"`{branch}`",
-                          "inline": True
-                      },
-                      {
-                          "name": "📂 Files",
-                          "value": affected,
-                          "inline": False
-                      },
-                      {
-                          "name": "🔗",
-                          "value": f"[**View full commit**]({commit_url})",
-                          "inline": False
-                      }
-                  ],
-
-                  "footer": {
-                      "text": repository
-                  }
-              }
-
-              payload = {
-                  "username": "GitHub",
-                  "embeds": [embed]
-              }
-
-              data = json.dumps(payload).encode("utf-8")
-
-              request = urllib.request.Request(
-                  webhook,
-                  data=data,
-                  headers={
-                      "Content-Type": "application/json",
-                      "User-Agent": "GitHub-Actions"
-                  },
-                  method="POST"
+          try:
+              result = subprocess.run(
+                  ["git", "diff", "--name-status", "HEAD^", "HEAD"],
+                  capture_output=True,
+                  text=True,
+                  check=True
               )
+              changed = result.stdout.strip().splitlines()
+          except Exception:
+              changed = []
 
-              with urllib.request.urlopen(request) as response:
-                  print("Discord response:", response.status)
+          added = []
+          modified = []
+          removed = []
+
+          for line in changed:
+              parts = line.split("\t", 1)
+
+              if len(parts) != 2:
+                  continue
+
+              status, filename = parts
+
+              if status.startswith("A"):
+                  added.append(filename)
+              elif status.startswith("M"):
+                  modified.append(filename)
+              elif status.startswith("D"):
+                  removed.append(filename)
+              elif status.startswith("R"):
+                  modified.append(filename)
+
+          files = []
+
+          for filename in added:
+              files.append(f"🟢 `{filename}`")
+
+          for filename in modified:
+              files.append(f"🟡 `{filename}`")
+
+          for filename in removed:
+              files.append(f"🔴 `{filename}`")
+
+          affected = "\n".join(files[:20]) if files else "No files changed."
+
+          if len(files) > 20:
+              affected += f"\n...and {len(files) - 20} more"
+
+          if len(message) > 1000:
+              message = message[:997] + "..."
+
+          embed = {
+              "title": name,
+              "description": f"**{name}** has committed something to the repository.",
+              "color": 15158332,
+              "author": {
+                  "name": username,
+                  "icon_url": avatar
+              },
+              "fields": [
+                  {
+                      "name": "📝 Commit",
+                      "value": f"`{commit_id[:7]}`\n{message}",
+                      "inline": False
+                  },
+                  {
+                      "name": "📁 Affected",
+                      "value": (
+                          f"**{len(files)}** file(s) changed\n"
+                          f"🟢 {len(added)} added\n"
+                          f"🟡 {len(modified)} modified\n"
+                          f"🔴 {len(removed)} removed"
+                      ),
+                      "inline": True
+                  },
+                  {
+                      "name": "🌿 Branch",
+                      "value": f"`{branch}`",
+                      "inline": True
+                  },
+                  {
+                      "name": "📂 Files",
+                      "value": affected,
+                      "inline": False
+                  },
+                  {
+                      "name": "🔗",
+                      "value": f"[**View full commit**]({commit_url})",
+                      "inline": False
+                  }
+              ],
+              "footer": {
+                  "text": repository
+              },
+              "timestamp": timestamp
+          }
+
+          payload = {
+              "username": "GitHub",
+              "embeds": [embed]
+          }
+
+          data = json.dumps(payload).encode("utf-8")
+
+          request = urllib.request.Request(
+              webhook,
+              data=data,
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "GitHub-Actions"
+              },
+              method="POST"
+          )
+
+          with urllib.request.urlopen(request) as response:
+              print(response.status)
+          PY
+```
