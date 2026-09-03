@@ -1,3 +1,7 @@
+Main Creator: Davidgr
+Main Developer: Yuri (Nikodem6789)
+
+
 # hashhashplus
 V1.0
 - Private
