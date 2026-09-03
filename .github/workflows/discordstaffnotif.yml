@@ -1,0 +1,249 @@
+```yaml
+name: Discord Commit Notifications
+
+on:
+  push:
+
+jobs:
+  discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send commit notification to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          GITHUB_EVENT: ${{ toJson(github.event) }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          AVATAR_URL: ${{ github.event.sender.avatar_url }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          python3 <<'PY'
+          import os
+          import json
+          import urllib.request
+
+          # ============================================================
+          # USERNAME → NICKNAME
+          #
+          # Add GitHub usernames here.
+          #
+          # Example:
+          # "Nikodem6789": "Yuri"
+          #
+          # If a username isn't listed, only their GitHub username
+          # will be displayed.
+          # ============================================================
+
+          USER_NICKNAMES = {
+              "Nikodem6789": "Yuri",
+              # "AnotherUsername": "TheirNickname",
+          }
+
+          # ============================================================
+          # GitHub event information
+          # ============================================================
+
+          event = json.loads(os.environ["GITHUB_EVENT"])
+
+          webhook = os.environ["DISCORD_WEBHOOK"]
+          repository = os.environ["REPOSITORY"]
+          branch = os.environ["BRANCH"]
+          actor = os.environ["ACTOR"]
+          avatar_url = os.environ["AVATAR_URL"]
+          is_private = os.environ["REPO_PRIVATE"].lower() == "true"
+
+          # ============================================================
+          # Display name
+          # ============================================================
+
+          nickname = USER_NICKNAMES.get(actor)
+
+          if nickname:
+              display_name = f"{actor} ({nickname})"
+          else:
+              display_name = actor
+
+          # ============================================================
+          # Process each commit
+          # ============================================================
+
+          commits = event.get("commits", [])
+
+          if not commits:
+              commits = [{
+                  "id": event.get("after", ""),
+                  "message": "No commit information available.",
+                  "url": event.get("compare", ""),
+                  "added": [],
+                  "removed": [],
+                  "modified": []
+              }]
+
+          for commit in commits:
+
+              commit_id = commit.get("id", "")
+              short_id = commit_id[:7]
+
+              message = commit.get("message", "").strip()
+
+              # Keep Discord embeds within their limits.
+              if len(message) > 1000:
+                  message = message[:997] + "..."
+
+              commit_url = commit.get("url", "")
+
+              added = commit.get("added", [])
+              removed = commit.get("removed", [])
+              modified = commit.get("modified", [])
+
+              additions = len(added)
+              deletions = len(removed)
+              modifications = len(modified)
+
+              total_files = additions + deletions + modifications
+
+              # ========================================================
+              # Affected files
+              # ========================================================
+
+              affected_lines = []
+
+              if added:
+                  affected_lines.append(
+                      "🟢 **Added**\n" +
+                      "\n".join(f"`{x}`" for x in added[:10])
+                  )
+
+              if modified:
+                  affected_lines.append(
+                      "🟡 **Modified**\n" +
+                      "\n".join(f"`{x}`" for x in modified[:10])
+                  )
+
+              if removed:
+                  affected_lines.append(
+                      "🔴 **Removed**\n" +
+                      "\n".join(f"`{x}`" for x in removed[:10])
+                  )
+
+              if affected_lines:
+                  affected = "\n\n".join(affected_lines)
+
+                  # Discord field limit protection
+                  if len(affected) > 1000:
+                      affected = affected[:997] + "..."
+              else:
+                  affected = "No file information available."
+
+              # ========================================================
+              # Repository visibility
+              # ========================================================
+
+              visibility = "🔒 Private repository" if is_private else "🌐 Public repository"
+
+              # ========================================================
+              # View full commit
+              #
+              # The link works for private repositories too, but the
+              # person clicking it must have access to the repository.
+              # ========================================================
+
+              view_commit = f"[**View full commit**]({commit_url})"
+
+              # ========================================================
+              # Discord embed
+              # ========================================================
+
+              embed = {
+                  "title": display_name,
+                  "description": (
+                      f"**{display_name}** has committed something "
+                      f"to the repository."
+                  ),
+                  "url": commit_url,
+                  "color": 15158332,
+
+                  "author": {
+                      "name": actor,
+                      "icon_url": avatar_url
+                  },
+
+                  "fields": [
+                      {
+                          "name": "📝 Commit",
+                          "value": (
+                              f"`{short_id}`\n"
+                              f"{message}"
+                          ),
+                          "inline": False
+                      },
+                      {
+                          "name": "📁 Affected",
+                          "value": (
+                              f"**{total_files}** file(s) changed\n"
+                              f"🟢 `{additions}` added\n"
+                              f"🟡 `{modifications}` modified\n"
+                              f"🔴 `{deletions}` removed"
+                          ),
+                          "inline": True
+                      },
+                      {
+                          "name": "🌿 Branch",
+                          "value": f"`{branch}`",
+                          "inline": True
+                      },
+                      {
+                          "name": "📂 Files",
+                          "value": affected,
+                          "inline": False
+                      },
+                      {
+                          "name": "🔗",
+                          "value": view_commit,
+                          "inline": False
+                      }
+                  ],
+
+                  "footer": {
+                      "text": f"{repository} • {visibility}"
+                  },
+
+                  "timestamp": event.get("head_commit", {}).get(
+                      "timestamp"
+                  )
+              }
+
+              payload = {
+                  "username": "GitHub",
+                  "avatar_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+                  "embeds": [embed]
+              }
+
+              # ========================================================
+              # Send to Discord
+              # ========================================================
+
+              data = json.dumps(payload).encode("utf-8")
+
+              request = urllib.request.Request(
+                  webhook,
+                  data=data,
+                  headers={
+                      "Content-Type": "application/json",
+                      "User-Agent": "GitHub-Actions-Discord"
+                  },
+                  method="POST"
+              )
+
+              try:
+                  with urllib.request.urlopen(request) as response:
+                      print(
+                          f"Discord notification sent: "
+                          f"{response.status}"
+                      )
+              except Exception as error:
+                  print(f"Failed to send Discord notification: {error}")
+                  raise
+```
