@@ -1,13 +1,20 @@
 import os
-import subprocess
 import sys
+import subprocess
 
 
-def main():
+class CommandEngine:
+    def __init__(self):
+        pass
+
+
+def run():
     folder = os.path.dirname(os.path.abspath(__file__))
 
-    if os.name != "nt" and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
-        subprocess.run([sys.executable, os.path.join(folder, "text.py")])
+    if os.name != "nt" and not (
+        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+    ):
+        subprocess.call([sys.executable, os.path.join(folder, "text.py")])
         return
 
     print("Hash++")
@@ -27,7 +34,7 @@ def main():
             creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
         )
     elif choice == "2":
-        subprocess.run([sys.executable, os.path.join(folder, "text.py")])
+        subprocess.call([sys.executable, os.path.join(folder, "text.py")])
     elif choice == "3":
         print("Coming soon..")
     elif choice == "4":
@@ -37,4 +44,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    run()
