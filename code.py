@@ -134,10 +134,16 @@ class CommandEngine:
             return commands[name](args)
 
         except ValueError as e:
-            return CommandResult(f"Error: {e}", True)
+            return CommandResult(
+                f"Error: {e}",
+                True
+            )
 
         except Exception as e:
-            return CommandResult(f"Error: {e}", True)
+            return CommandResult(
+                f"Error: {e}",
+                True
+            )
 
         finally:
             self._finish()
@@ -225,10 +231,14 @@ class CommandEngine:
         return CommandResult("\f")
 
     def _discord(self, args):
-        return CommandResult("https://discord.gg/hscSEBa9X")
+        return CommandResult(
+            "https://discord.gg/hscSEBa9X"
+        )
 
     def _github(self, args):
-        return CommandResult("https://github.com/Minzoi-Lab")
+        return CommandResult(
+            "https://github.com/Minzoi-Lab"
+        )
 
     def _request(self, args):
         if not args:
@@ -239,19 +249,30 @@ class CommandEngine:
 
         url = args[0]
 
-        if not re.match(r"^https?://", url, re.IGNORECASE):
+        if not re.match(
+            r"^https?://",
+            url,
+            re.IGNORECASE
+        ):
             return CommandResult(
                 "Invalid URL. Use http:// or https://",
                 True
             )
 
-        method = args[1].upper() if len(args) >= 2 else "GET"
+        method = (
+            args[1].upper()
+            if len(args) >= 2
+            else "GET"
+        )
 
         if method == "GET":
             return self._browser_request(url)
 
         if method == "DELETE":
-            return self._simple_request(url, "DELETE")
+            return self._simple_request(
+                url,
+                "DELETE"
+            )
 
         if method not in {"POST", "PUT", "PATCH"}:
             return CommandResult(
@@ -295,6 +316,7 @@ class CommandEngine:
             try:
                 with open(path, "rb") as f:
                     body = f.read()
+
             except Exception as e:
                 return CommandResult(
                     f"Could not read file: {e}",
@@ -307,7 +329,11 @@ class CommandEngine:
                 True
             )
 
-        return self._simple_request(url, method, body)
+        return self._simple_request(
+            url,
+            method,
+            body
+        )
 
     def _browser_request(self, url):
         if self._cancelled():
@@ -332,7 +358,9 @@ class CommandEngine:
                         True
                     )
 
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(
+                    headless=True
+                )
 
                 page = browser.new_page(
                     java_script_enabled=True,
@@ -367,7 +395,12 @@ class CommandEngine:
                         True
                     )
 
-                status = response.status if response else 0
+                status = (
+                    response.status
+                    if response
+                    else 0
+                )
+
                 final_url = page.url
 
                 try:
@@ -376,7 +409,9 @@ class CommandEngine:
                     title = ""
 
                 try:
-                    text = page.locator("body").inner_text(
+                    text = page.locator(
+                        "body"
+                    ).inner_text(
                         timeout=5000
                     ).strip()
                 except Exception:
@@ -405,7 +440,12 @@ class CommandEngine:
                 True
             )
 
-    def _simple_request(self, url, method, body=None):
+    def _simple_request(
+        self,
+        url,
+        method,
+        body=None
+    ):
         if self._cancelled():
             return CommandResult(
                 "Operation cancelled.",
@@ -417,7 +457,9 @@ class CommandEngine:
                 url,
                 data=body,
                 method=method,
-                headers={"User-Agent": "Hash++"}
+                headers={
+                    "User-Agent": "Hash++"
+                }
             )
 
             with urllib.request.urlopen(
@@ -452,6 +494,7 @@ class CommandEngine:
                         indent=2,
                         ensure_ascii=False
                     )
+
                 except Exception:
                     pass
 
@@ -508,7 +551,11 @@ class CommandEngine:
         except Exception:
             return False
 
-    def _run_process(self, command, cwd=None):
+    def _run_process(
+        self,
+        command,
+        cwd=None
+    ):
         process = None
         output = []
 
@@ -542,7 +589,10 @@ class CommandEngine:
                     except subprocess.TimeoutExpired:
                         process.kill()
 
-                    return False, "".join(output)
+                    return (
+                        False,
+                        "".join(output)
+                    )
 
                 time.sleep(0.1)
 
@@ -597,7 +647,12 @@ class CommandEngine:
 
         if self._is_git_repo(current):
             success, output = self._run_process(
-                ["git", "-C", current, "pull"]
+                [
+                    "git",
+                    "-C",
+                    current,
+                    "pull"
+                ]
             )
 
             if self._cancelled():
@@ -616,7 +671,8 @@ class CommandEngine:
 
             if not success:
                 return CommandResult(
-                    output.strip() or "Update failed.",
+                    output.strip()
+                    or "Update failed.",
                     True
                 )
 
@@ -647,12 +703,17 @@ class CommandEngine:
         if os.path.exists(target):
             if self._is_git_repo(target):
                 success, output = self._run_process(
-                    ["git", "-C", target, "pull"]
+                    [
+                        "git",
+                        "-C",
+                        target,
+                        "pull"
+                    ]
                 )
             else:
                 return CommandResult(
-                    f"Cannot update because {target} already exists "
-                    "and is not a Git repository.",
+                    f"Cannot update because {target} "
+                    "already exists and is not a Git repository.",
                     True
                 )
 
@@ -682,7 +743,8 @@ class CommandEngine:
 
         if not success:
             return CommandResult(
-                output.strip() or "Update failed.",
+                output.strip()
+                or "Update failed.",
                 True
             )
 
@@ -720,15 +782,17 @@ class CommandEngine:
 
 
 def run():
-    print("Hash++")
-    print()
-
     base = os.path.dirname(
         os.path.abspath(__file__)
     )
 
+    print("Hash++")
+    print()
+
     if sys.platform.startswith("linux"):
-        if not os.environ.get("DISPLAY") and not os.environ.get(
+        if not os.environ.get(
+            "DISPLAY"
+        ) and not os.environ.get(
             "WAYLAND_DISPLAY"
         ):
             text_path = os.path.join(
@@ -795,7 +859,9 @@ def run():
             if choice == "4":
                 return
 
-            print("Please choose 1, 2, 3, or 4.")
+            print(
+                "Please choose 1, 2, 3, or 4."
+            )
 
         except KeyboardInterrupt:
             print()
