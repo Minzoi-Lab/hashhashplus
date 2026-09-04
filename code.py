@@ -70,21 +70,6 @@ def get_playwright():
         return None
 
 
-def wait_for_process(pid):
-    if not pid:
-        return
-
-    while True:
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            break
-        except Exception:
-            break
-
-        time.sleep(0.1)
-
-
 class CommandEngine:
     def __init__(self):
         self.cancel_event = threading.Event()
@@ -773,38 +758,37 @@ class CommandEngine:
         )
 
 
-def launch_code(path):
-    path = os.path.abspath(path)
-    folder = os.path.dirname(path)
+def run_text(text_path):
+    text_path = os.path.abspath(text_path)
 
-    env = os.environ.copy()
-    env["HASHPP_WAIT_PID"] = str(os.getpid())
-
-    subprocess.Popen(
-        [
-            sys.executable,
-            path
-        ],
-        cwd=folder,
-        env=env
+    process = subprocess.Popen(
+        [sys.executable, text_path],
+        cwd=os.path.dirname(text_path)
     )
+
+    process.wait()
+
+    restart_path = os.environ.pop(
+        "HASHPP_RESTART",
+        ""
+    )
+
+    if restart_path:
+        restart_path = os.path.abspath(
+            restart_path
+        )
+
+        if os.path.isfile(restart_path):
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    restart_path
+                ],
+                cwd=os.path.dirname(restart_path)
+            )
 
 
 def run():
-    wait_pid = os.environ.pop(
-        "HASHPP_WAIT_PID",
-        None
-    )
-
-    if wait_pid:
-        try:
-            wait_pid = int(wait_pid)
-        except ValueError:
-            wait_pid = None
-
-    if wait_pid:
-        wait_for_process(wait_pid)
-
     base = os.path.dirname(
         os.path.abspath(__file__)
     )
@@ -813,7 +797,9 @@ def run():
     print()
 
     if sys.platform.startswith("linux"):
-        if not os.environ.get("DISPLAY") and not os.environ.get(
+        if not os.environ.get(
+            "DISPLAY"
+        ) and not os.environ.get(
             "WAYLAND_DISPLAY"
         ):
             text_path = os.path.join(
@@ -863,15 +849,7 @@ def run():
                     "text.py"
                 )
 
-                process = subprocess.Popen(
-                    [
-                        sys.executable,
-                        text_path
-                    ],
-                    cwd=base
-                )
-
-                process.wait()
+                run_text(text_path)
                 return
 
             if choice == "3":

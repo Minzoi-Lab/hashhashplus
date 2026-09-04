@@ -1,7 +1,8 @@
 import os
 import sys
 import time
-from code import CommandEngine, CommandResult
+
+from code import CommandEngine
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
@@ -34,7 +35,10 @@ class TerminalInput:
 
         buffer = ""
         cursor = 0
-        self.history_index = len(self.history)
+
+        self.history_index = len(
+            self.history
+        )
 
         sys.stdout.write(prompt)
         sys.stdout.flush()
@@ -59,7 +63,11 @@ class TerminalInput:
 
             if key == "\x0c":
                 os.system("cls")
-                self._draw(prompt, buffer, cursor)
+                self._draw(
+                    prompt,
+                    buffer,
+                    cursor
+                )
                 continue
 
             if key == "\x08":
@@ -68,8 +76,14 @@ class TerminalInput:
                         buffer[:cursor - 1]
                         + buffer[cursor:]
                     )
+
                     cursor -= 1
-                    self._draw(prompt, buffer, cursor)
+
+                    self._draw(
+                        prompt,
+                        buffer,
+                        cursor
+                    )
 
                 continue
 
@@ -88,7 +102,12 @@ class TerminalInput:
                         ]
 
                         cursor = len(buffer)
-                        self._draw(prompt, buffer, cursor)
+
+                        self._draw(
+                            prompt,
+                            buffer,
+                            cursor
+                        )
 
                 elif key == "P":
                     if self.history:
@@ -97,7 +116,10 @@ class TerminalInput:
                             self.history_index + 1
                         )
 
-                        if self.history_index < len(self.history):
+                        if (
+                            self.history_index
+                            < len(self.history)
+                        ):
                             buffer = self.history[
                                 self.history_index
                             ]
@@ -105,25 +127,50 @@ class TerminalInput:
                             buffer = ""
 
                         cursor = len(buffer)
-                        self._draw(prompt, buffer, cursor)
+
+                        self._draw(
+                            prompt,
+                            buffer,
+                            cursor
+                        )
 
                 elif key == "K":
                     if cursor > 0:
                         cursor -= 1
-                        self._draw(prompt, buffer, cursor)
+
+                        self._draw(
+                            prompt,
+                            buffer,
+                            cursor
+                        )
 
                 elif key == "M":
                     if cursor < len(buffer):
                         cursor += 1
-                        self._draw(prompt, buffer, cursor)
+
+                        self._draw(
+                            prompt,
+                            buffer,
+                            cursor
+                        )
 
                 elif key == "G":
                     cursor = 0
-                    self._draw(prompt, buffer, cursor)
+
+                    self._draw(
+                        prompt,
+                        buffer,
+                        cursor
+                    )
 
                 elif key == "O":
                     cursor = len(buffer)
-                    self._draw(prompt, buffer, cursor)
+
+                    self._draw(
+                        prompt,
+                        buffer,
+                        cursor
+                    )
 
                 elif key == "S":
                     if cursor < len(buffer):
@@ -131,7 +178,12 @@ class TerminalInput:
                             buffer[:cursor]
                             + buffer[cursor + 1:]
                         )
-                        self._draw(prompt, buffer, cursor)
+
+                        self._draw(
+                            prompt,
+                            buffer,
+                            cursor
+                        )
 
                 continue
 
@@ -143,18 +195,27 @@ class TerminalInput:
                 )
 
                 cursor += 1
-                self._draw(prompt, buffer, cursor)
+
+                self._draw(
+                    prompt,
+                    buffer,
+                    cursor
+                )
 
     def _unix(self, prompt):
         import termios
         import tty
 
         fd = sys.stdin.fileno()
+
         old_settings = termios.tcgetattr(fd)
 
         buffer = ""
         cursor = 0
-        self.history_index = len(self.history)
+
+        self.history_index = len(
+            self.history
+        )
 
         sys.stdout.write(prompt)
         sys.stdout.flush()
@@ -181,8 +242,16 @@ class TerminalInput:
                     raise EOFError
 
                 if key == "\x0c":
-                    sys.stdout.write("\033[2J\033[H")
-                    self._draw(prompt, buffer, cursor)
+                    sys.stdout.write(
+                        "\033[2J\033[H"
+                    )
+
+                    self._draw(
+                        prompt,
+                        buffer,
+                        cursor
+                    )
+
                     continue
 
                 if key == "\x7f":
@@ -191,8 +260,14 @@ class TerminalInput:
                             buffer[:cursor - 1]
                             + buffer[cursor:]
                         )
+
                         cursor -= 1
-                        self._draw(prompt, buffer, cursor)
+
+                        self._draw(
+                            prompt,
+                            buffer,
+                            cursor
+                        )
 
                     continue
 
@@ -211,6 +286,7 @@ class TerminalInput:
                             ]
 
                             cursor = len(buffer)
+
                             self._draw(
                                 prompt,
                                 buffer,
@@ -224,7 +300,10 @@ class TerminalInput:
                                 self.history_index + 1
                             )
 
-                            if self.history_index < len(self.history):
+                            if (
+                                self.history_index
+                                < len(self.history)
+                            ):
                                 buffer = self.history[
                                     self.history_index
                                 ]
@@ -232,6 +311,7 @@ class TerminalInput:
                                 buffer = ""
 
                             cursor = len(buffer)
+
                             self._draw(
                                 prompt,
                                 buffer,
@@ -241,6 +321,7 @@ class TerminalInput:
                     elif sequence == "[C":
                         if cursor < len(buffer):
                             cursor += 1
+
                             self._draw(
                                 prompt,
                                 buffer,
@@ -250,6 +331,7 @@ class TerminalInput:
                     elif sequence == "[D":
                         if cursor > 0:
                             cursor -= 1
+
                             self._draw(
                                 prompt,
                                 buffer,
@@ -258,6 +340,7 @@ class TerminalInput:
 
                     elif sequence == "[H":
                         cursor = 0
+
                         self._draw(
                             prompt,
                             buffer,
@@ -266,6 +349,7 @@ class TerminalInput:
 
                     elif sequence == "[F":
                         cursor = len(buffer)
+
                         self._draw(
                             prompt,
                             buffer,
@@ -282,6 +366,7 @@ class TerminalInput:
                     )
 
                     cursor += 1
+
                     self._draw(
                         prompt,
                         buffer,
@@ -299,14 +384,14 @@ class TerminalInput:
 def show_cancel_warning(console):
     console.print(
         Panel(
-            "Use [bold]exit[/bold] if you are trying to close Hash++.",
+            "Use [bold]exit[/bold] if you are trying "
+            "to close Hash++.",
             border_style="dark_orange",
             padding=(0, 1)
         )
     )
 
     time.sleep(5)
-
     console.clear()
 
 
@@ -359,9 +444,13 @@ def main():
         except KeyboardInterrupt:
             if engine.busy:
                 engine.cancel()
+
                 console.print(
-                    "\n[dark_orange]Operation cancelled.[/dark_orange]"
+                    "\n[dark_orange]"
+                    "Operation cancelled."
+                    "[/dark_orange]"
                 )
+
             else:
                 console.print()
                 show_cancel_warning(console)
@@ -375,53 +464,28 @@ def main():
             engine.cancel()
 
             console.print(
-                "[dark_orange]Operation cancelled.[/dark_orange]"
+                "[dark_orange]"
+                "Operation cancelled."
+                "[/dark_orange]"
             )
 
             continue
 
-        except Exception as e:
-            result = CommandResult(
-                f"Error: {e}",
-                True
-            )
-
-        print_result(console, result)
+        print_result(
+            console,
+            result
+        )
 
         if result.should_exit:
             if result.restart:
                 restart_path = result.restart_path
 
                 if restart_path:
-                    folder = os.path.dirname(
-                        os.path.abspath(restart_path)
+                    os.environ[
+                        "HASHPP_RESTART"
+                    ] = os.path.abspath(
+                        restart_path
                     )
-                else:
-                    folder = os.path.dirname(
-                        os.path.abspath(__file__)
-                    )
-
-                text_path = os.path.join(
-                    folder,
-                    "text.py"
-                )
-
-                if not os.path.isfile(text_path):
-                    console.print(
-                        "[indian_red]Restart failed: "
-                        "text.py was not found.[/indian_red]"
-                    )
-                    continue
-
-                os.chdir(folder)
-
-                os.execv(
-                    sys.executable,
-                    [
-                        sys.executable,
-                        text_path
-                    ]
-                )
 
             break
 
