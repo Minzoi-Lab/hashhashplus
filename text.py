@@ -1,4 +1,3 @@
-```python
 import os
 import sys
 import time
@@ -429,4 +428,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
