@@ -9,6 +9,11 @@ V1.6
 Python required!
 
 
+Issues? (If you know the answers, help someone!)
+https://github.com/Minzoi-Lab/hashhashplus/issues
+
+Any bugs ARE expected.
+
 ## CURRENT Installation
 - Run 'git clone https://github.com/Minzoi-Lab/hashhashplus.git' in your terminal.
 - then 'cd hashhashplus'
