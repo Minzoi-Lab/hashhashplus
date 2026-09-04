@@ -782,32 +782,15 @@ class CommandEngine:
 
 
 def run():
-    base = os.path.dirname(
-        os.path.abspath(__file__)
-    )
+    base = os.path.dirname(os.path.abspath(__file__))
 
     print("Hash++")
     print()
 
     if sys.platform.startswith("linux"):
-        if not os.environ.get(
-            "DISPLAY"
-        ) and not os.environ.get(
-            "WAYLAND_DISPLAY"
-        ):
-            text_path = os.path.join(
-                base,
-                "text.py"
-            )
-
-            os.execv(
-                sys.executable,
-                [
-                    sys.executable,
-                    text_path
-                ]
-            )
-
+        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            text_path = os.path.join(base, "text.py")
+            os.execv(sys.executable, [sys.executable, text_path])
             return
 
     print("1. UI")
@@ -821,35 +804,24 @@ def run():
             choice = input("> ").strip()
 
             if choice == "1":
-                gui_path = os.path.join(
-                    base,
-                    "gui.py"
-                )
+                gui_path = os.path.join(base, "gui.py")
 
                 subprocess.Popen(
-                    [
-                        sys.executable,
-                        gui_path
-                    ],
+                    [sys.executable, gui_path],
                     cwd=base
                 )
 
                 return
 
             if choice == "2":
-                text_path = os.path.join(
-                    base,
-                    "text.py"
+                text_path = os.path.join(base, "text.py")
+
+                process = subprocess.Popen(
+                    [sys.executable, text_path],
+                    cwd=base
                 )
 
-                os.execv(
-                    sys.executable,
-                    [
-                        sys.executable,
-                        text_path
-                    ]
-                )
-
+                process.wait()
                 return
 
             if choice == "3":
@@ -859,9 +831,7 @@ def run():
             if choice == "4":
                 return
 
-            print(
-                "Please choose 1, 2, 3, or 4."
-            )
+            print("Please choose 1, 2, 3, or 4.")
 
         except KeyboardInterrupt:
             print()
