@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-
 from code import CommandEngine
 from rich.console import Console
 from rich.panel import Panel
@@ -15,7 +14,12 @@ def show_cancel_warning(console):
         style="white on dark_orange"
     )
 
-    with Live(warning, console=console, refresh_per_second=10, transient=True):
+    with Live(
+        warning,
+        console=console,
+        refresh_per_second=10,
+        transient=True
+    ):
         time.sleep(5)
 
 
@@ -32,11 +36,15 @@ def main():
 
     while True:
         try:
-            command = console.input("[dark_orange]hash++>[/dark_orange] ")
+            command = console.input(
+                "[dark_orange]hash++>[/dark_orange] "
+            )
         except (EOFError, KeyboardInterrupt):
             if engine.busy:
                 engine.cancel()
-                console.print("[dark_orange]Operation cancelled.[/dark_orange]")
+                console.print(
+                    "[dark_orange]Operation cancelled.[/dark_orange]"
+                )
             else:
                 show_cancel_warning(console)
             continue
@@ -45,26 +53,46 @@ def main():
             result = engine.execute(command)
         except KeyboardInterrupt:
             engine.cancel()
-            console.print("[dark_orange]Operation cancelled.[/dark_orange]")
+            console.print(
+                "[dark_orange]Operation cancelled.[/dark_orange]"
+            )
             continue
 
         if result.output == "\f":
             console.clear()
         elif result.output:
             style = "indian_red" if result.is_error else ""
-            console.print(Text(result.output, style=style))
+            console.print(
+                Text(result.output, style=style)
+            )
 
         if result.should_exit:
             if result.restart:
                 restart_path = result.restart_path
 
-                if not restart_path:
-                    restart_path = os.path.join(
-                        os.path.dirname(os.path.abspath(__file__)),
-                        "code.py"
+                if restart_path:
+                    folder = os.path.dirname(
+                        os.path.abspath(restart_path)
+                    )
+                else:
+                    folder = os.path.dirname(
+                        os.path.abspath(__file__)
                     )
 
-                os.execv(sys.executable, [sys.executable, restart_path])
+                text_path = os.path.join(folder, "text.py")
+
+                if not os.path.isfile(text_path):
+                    console.print(
+                        "[indian_red]Restart failed: text.py was not found.[/indian_red]"
+                    )
+                    break
+
+                os.chdir(folder)
+
+                os.execv(
+                    sys.executable,
+                    [sys.executable, text_path]
+                )
 
             break
 

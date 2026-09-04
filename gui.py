@@ -4,9 +4,7 @@ import os
 import subprocess
 import sys
 import threading
-
 from code import CommandEngine, CommandResult
-
 
 THEMES = {
     "light": {
@@ -45,6 +43,7 @@ class HashGui:
         self.root.geometry("860x580")
         self.root.minsize(540, 380)
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=1)
 
@@ -53,7 +52,6 @@ class HashGui:
 
         self._build()
         self._paint()
-
         self._write("Type help to see what is available.")
         self.command.focus_set()
 
@@ -112,6 +110,7 @@ class HashGui:
             "prompt",
             font=("Cascadia Mono", 11, "bold")
         )
+
         self.output.tag_configure(
             "error",
             font=("Cascadia Mono", 11)
@@ -403,15 +402,35 @@ class HashGui:
             if result.restart:
                 restart_path = result.restart_path
 
-                if not restart_path:
-                    restart_path = os.path.join(
-                        os.path.dirname(os.path.abspath(__file__)),
-                        "code.py"
+                if restart_path:
+                    folder = os.path.dirname(
+                        os.path.abspath(restart_path)
+                    )
+                else:
+                    folder = os.path.dirname(
+                        os.path.abspath(__file__)
                     )
 
-                subprocess.Popen(
-                    [sys.executable, restart_path]
-                )
+                gui_path = os.path.join(folder, "gui.py")
+
+                if not os.path.isfile(gui_path):
+                    self._write(
+                        "Restart failed: gui.py was not found.",
+                        "error"
+                    )
+                    return
+
+                try:
+                    subprocess.Popen(
+                        [sys.executable, gui_path],
+                        cwd=folder
+                    )
+                except Exception as e:
+                    self._write(
+                        f"Restart failed: {e}",
+                        "error"
+                    )
+                    return
 
             self.root.destroy()
             return
