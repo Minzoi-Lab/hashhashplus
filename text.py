@@ -477,15 +477,25 @@ def main():
         )
 
         if result.should_exit:
-            if result.restart:
-                restart_path = result.restart_path
+            if result.restart and result.restart_path:
+                result_file = os.environ.get(
+                    "HASHPP_RESULT_FILE"
+                )
 
-                if restart_path:
-                    os.environ[
-                        "HASHPP_RESTART"
-                    ] = os.path.abspath(
-                        restart_path
-                    )
+                if result_file:
+                    try:
+                        with open(
+                            result_file,
+                            "w",
+                            encoding="utf-8"
+                        ) as f:
+                            f.write(
+                                os.path.abspath(
+                                    result.restart_path
+                                )
+                            )
+                    except Exception:
+                        pass
 
             break
 
