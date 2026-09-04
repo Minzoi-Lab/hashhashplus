@@ -61,15 +61,28 @@ def get_playwright():
             [sys.executable, "-m", "pip", "install", "playwright"],
             check=True
         )
-
         subprocess.run(
             [sys.executable, "-m", "playwright", "install", "chromium"],
             check=True
         )
-
         return importlib.import_module("playwright.sync_api")
     except Exception:
         return None
+
+
+def wait_for_process(pid):
+    if not pid:
+        return
+
+    while True:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            break
+        except Exception:
+            break
+
+        time.sleep(0.1)
 
 
 class CommandEngine:
@@ -316,7 +329,6 @@ class CommandEngine:
             try:
                 with open(path, "rb") as f:
                     body = f.read()
-
             except Exception as e:
                 return CommandResult(
                     f"Could not read file: {e}",
@@ -395,12 +407,7 @@ class CommandEngine:
                         True
                     )
 
-                status = (
-                    response.status
-                    if response
-                    else 0
-                )
-
+                status = response.status if response else 0
                 final_url = page.url
 
                 try:
@@ -440,12 +447,7 @@ class CommandEngine:
                 True
             )
 
-    def _simple_request(
-        self,
-        url,
-        method,
-        body=None
-    ):
+    def _simple_request(self, url, method, body=None):
         if self._cancelled():
             return CommandResult(
                 "Operation cancelled.",
@@ -488,13 +490,11 @@ class CommandEngine:
             if "application/json" in content_type:
                 try:
                     parsed = json.loads(text)
-
                     text = json.dumps(
                         parsed,
                         indent=2,
                         ensure_ascii=False
                     )
-
                 except Exception:
                     pass
 
@@ -551,11 +551,7 @@ class CommandEngine:
         except Exception:
             return False
 
-    def _run_process(
-        self,
-        command,
-        cwd=None
-    ):
+    def _run_process(self, command, cwd=None):
         process = None
         output = []
 
@@ -589,10 +585,7 @@ class CommandEngine:
                     except subprocess.TimeoutExpired:
                         process.kill()
 
-                    return (
-                        False,
-                        "".join(output)
-                    )
+                    return False, "".join(output)
 
                 time.sleep(0.1)
 
@@ -716,7 +709,6 @@ class CommandEngine:
                     "already exists and is not a Git repository.",
                     True
                 )
-
         else:
             success, output = self._run_process(
                 [
@@ -781,16 +773,62 @@ class CommandEngine:
         )
 
 
+def launch_code(path):
+    path = os.path.abspath(path)
+    folder = os.path.dirname(path)
+
+    env = os.environ.copy()
+    env["HASHPP_WAIT_PID"] = str(os.getpid())
+
+    subprocess.Popen(
+        [
+            sys.executable,
+            path
+        ],
+        cwd=folder,
+        env=env
+    )
+
+
 def run():
-    base = os.path.dirname(os.path.abspath(__file__))
+    wait_pid = os.environ.pop(
+        "HASHPP_WAIT_PID",
+        None
+    )
+
+    if wait_pid:
+        try:
+            wait_pid = int(wait_pid)
+        except ValueError:
+            wait_pid = None
+
+    if wait_pid:
+        wait_for_process(wait_pid)
+
+    base = os.path.dirname(
+        os.path.abspath(__file__)
+    )
 
     print("Hash++")
     print()
 
     if sys.platform.startswith("linux"):
-        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
-            text_path = os.path.join(base, "text.py")
-            os.execv(sys.executable, [sys.executable, text_path])
+        if not os.environ.get("DISPLAY") and not os.environ.get(
+            "WAYLAND_DISPLAY"
+        ):
+            text_path = os.path.join(
+                base,
+                "text.py"
+            )
+
+            os.execv(
+                sys.executable,
+                [
+                    sys.executable,
+                    text_path
+                ]
+            )
+
             return
 
     print("1. UI")
@@ -804,20 +842,32 @@ def run():
             choice = input("> ").strip()
 
             if choice == "1":
-                gui_path = os.path.join(base, "gui.py")
+                gui_path = os.path.join(
+                    base,
+                    "gui.py"
+                )
 
                 subprocess.Popen(
-                    [sys.executable, gui_path],
+                    [
+                        sys.executable,
+                        gui_path
+                    ],
                     cwd=base
                 )
 
                 return
 
             if choice == "2":
-                text_path = os.path.join(base, "text.py")
+                text_path = os.path.join(
+                    base,
+                    "text.py"
+                )
 
                 process = subprocess.Popen(
-                    [sys.executable, text_path],
+                    [
+                        sys.executable,
+                        text_path
+                    ],
                     cwd=base
                 )
 
@@ -831,7 +881,9 @@ def run():
             if choice == "4":
                 return
 
-            print("Please choose 1, 2, 3, or 4.")
+            print(
+                "Please choose 1, 2, 3, or 4."
+            )
 
         except KeyboardInterrupt:
             print()
