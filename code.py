@@ -9,10 +9,10 @@ import shlex
 import socket
 import urllib.request
 import urllib.error
+import tempfile
 from dataclasses import dataclass
 from html.parser import HTMLParser
 import importlib
-
 
 GITHUB_REPO = "https://github.com/Minzoi-Lab/hashhashplus"
 
@@ -86,7 +86,6 @@ class CommandEngine:
 
     def _start(self):
         self.cancel_event.clear()
-
         with self._lock:
             self._busy = True
 
@@ -132,16 +131,10 @@ class CommandEngine:
             return commands[name](args)
 
         except ValueError as e:
-            return CommandResult(
-                f"Error: {e}",
-                True
-            )
+            return CommandResult(f"Error: {e}", True)
 
         except Exception as e:
-            return CommandResult(
-                f"Error: {e}",
-                True
-            )
+            return CommandResult(f"Error: {e}", True)
 
         finally:
             self._finish()
@@ -171,25 +164,16 @@ class CommandEngine:
         command = args[0].lower()
 
         manuals = {
-            "help":
-                "help\n"
-                "Show the list of available Hash++ commands.",
+            "help": "help\nShow the list of available Hash++ commands.",
 
-            "man":
-                "man <command>\n"
-                "Show information about a Hash++ command.",
+            "man": "man <command>\n"
+                   "Show information about a Hash++ command.",
 
-            "clear":
-                "clear\n"
-                "Clear the current Hash++ screen.",
+            "clear": "clear\nClear the current Hash++ screen.",
 
-            "discord":
-                "discord\n"
-                "Show the Minzi Lab Discord server.",
+            "discord": "discord\nShow the Minzi Lab Discord server.",
 
-            "github":
-                "github\n"
-                "Show the Minzi Lab GitHub organization.",
+            "github": "github\nShow the Minzi Lab GitHub organization.",
 
             "request":
                 "request <url>\n"
@@ -205,16 +189,13 @@ class CommandEngine:
                 "Send a DELETE request.",
 
             "update":
-                "update\n"
-                "Update Hash++ from its Git repository.",
+                "update\nUpdate Hash++ from its Git repository.",
 
             "restart":
-                "restart\n"
-                "Restart Hash++.",
+                "restart\nRestart Hash++.",
 
             "exit":
-                "exit\n"
-                "Close Hash++."
+                "exit\nClose Hash++."
         }
 
         if command not in manuals:
@@ -229,14 +210,10 @@ class CommandEngine:
         return CommandResult("\f")
 
     def _discord(self, args):
-        return CommandResult(
-            "https://discord.gg/hscSEBa9X"
-        )
+        return CommandResult("https://discord.gg/hscSEBa9X")
 
     def _github(self, args):
-        return CommandResult(
-            "https://github.com/Minzoi-Lab"
-        )
+        return CommandResult("https://github.com/Minzi-Lab")
 
     def _request(self, args):
         if not args:
@@ -247,30 +224,19 @@ class CommandEngine:
 
         url = args[0]
 
-        if not re.match(
-            r"^https?://",
-            url,
-            re.IGNORECASE
-        ):
+        if not re.match(r"^https?://", url, re.IGNORECASE):
             return CommandResult(
                 "Invalid URL. Use http:// or https://",
                 True
             )
 
-        method = (
-            args[1].upper()
-            if len(args) >= 2
-            else "GET"
-        )
+        method = args[1].upper() if len(args) >= 2 else "GET"
 
         if method == "GET":
             return self._browser_request(url)
 
         if method == "DELETE":
-            return self._simple_request(
-                url,
-                "DELETE"
-            )
+            return self._simple_request(url, "DELETE")
 
         if method not in {"POST", "PUT", "PATCH"}:
             return CommandResult(
@@ -326,11 +292,7 @@ class CommandEngine:
                 True
             )
 
-        return self._simple_request(
-            url,
-            method,
-            body
-        )
+        return self._simple_request(url, method, body)
 
     def _browser_request(self, url):
         if self._cancelled():
@@ -355,9 +317,7 @@ class CommandEngine:
                         True
                     )
 
-                browser = p.chromium.launch(
-                    headless=True
-                )
+                browser = p.chromium.launch(headless=True)
 
                 page = browser.new_page(
                     java_script_enabled=True,
@@ -386,7 +346,6 @@ class CommandEngine:
 
                 if self._cancelled():
                     browser.close()
-
                     return CommandResult(
                         "Operation cancelled.",
                         True
@@ -582,8 +541,7 @@ class CommandEngine:
             )
 
         except FileNotFoundError:
-            return (
-                False,
+            return False, (
                 "Git is not installed or could not be found."
             )
 
@@ -649,8 +607,7 @@ class CommandEngine:
 
             if not success:
                 return CommandResult(
-                    output.strip()
-                    or "Update failed.",
+                    output.strip() or "Update failed.",
                     True
                 )
 
@@ -694,6 +651,7 @@ class CommandEngine:
                     "already exists and is not a Git repository.",
                     True
                 )
+
         else:
             success, output = self._run_process(
                 [
@@ -720,8 +678,7 @@ class CommandEngine:
 
         if not success:
             return CommandResult(
-                output.strip()
-                or "Update failed.",
+                output.strip() or "Update failed.",
                 True
             )
 
@@ -761,31 +718,56 @@ class CommandEngine:
 def run_text(text_path):
     text_path = os.path.abspath(text_path)
 
+    result_file = os.path.join(
+        tempfile.gettempdir(),
+        f"hashpp_restart_{os.getpid()}.txt"
+    )
+
+    try:
+        os.remove(result_file)
+    except FileNotFoundError:
+        pass
+
+    env = os.environ.copy()
+    env["HASHPP_RESULT_FILE"] = result_file
+
     process = subprocess.Popen(
-        [sys.executable, text_path],
-        cwd=os.path.dirname(text_path)
+        [
+            sys.executable,
+            text_path
+        ],
+        cwd=os.path.dirname(text_path),
+        env=env
     )
 
     process.wait()
 
-    restart_path = os.environ.pop(
-        "HASHPP_RESTART",
-        ""
-    )
+    if not os.path.isfile(result_file):
+        return
 
-    if restart_path:
-        restart_path = os.path.abspath(
-            restart_path
+    try:
+        with open(
+            result_file,
+            "r",
+            encoding="utf-8"
+        ) as f:
+            restart_path = f.read().strip()
+    except Exception:
+        restart_path = ""
+
+    try:
+        os.remove(result_file)
+    except FileNotFoundError:
+        pass
+
+    if restart_path and os.path.isfile(restart_path):
+        subprocess.Popen(
+            [
+                sys.executable,
+                restart_path
+            ],
+            cwd=os.path.dirname(restart_path)
         )
-
-        if os.path.isfile(restart_path):
-            subprocess.Popen(
-                [
-                    sys.executable,
-                    restart_path
-                ],
-                cwd=os.path.dirname(restart_path)
-            )
 
 
 def run():
@@ -797,24 +779,16 @@ def run():
     print()
 
     if sys.platform.startswith("linux"):
-        if not os.environ.get(
-            "DISPLAY"
-        ) and not os.environ.get(
-            "WAYLAND_DISPLAY"
+        if (
+            not os.environ.get("DISPLAY")
+            and not os.environ.get("WAYLAND_DISPLAY")
         ):
             text_path = os.path.join(
                 base,
                 "text.py"
             )
 
-            os.execv(
-                sys.executable,
-                [
-                    sys.executable,
-                    text_path
-                ]
-            )
-
+            run_text(text_path)
             return
 
     print("1. UI")
