@@ -11,6 +11,7 @@ import urllib.request
 import urllib.error
 from dataclasses import dataclass
 from html.parser import HTMLParser
+import importlib
 
 
 GITHUB_REPO = "https://github.com/Minzoi-Lab/hashhashplus"
@@ -32,61 +33,54 @@ class HTMLTextParser(HTMLParser):
         self.skip = 0
 
     def handle_starttag(self, tag, attrs):
-        if tag in {"script", "style", "noscript", "template", "svg"}:
+        if tag.lower() in {"script", "style", "noscript"}:
             self.skip += 1
-            return
-
-        if self.skip:
-            return
-
-        if tag in {
-            "p", "div", "section", "article", "main", "header",
-            "footer", "nav", "li", "h1", "h2", "h3", "h4",
-            "h5", "h6", "br", "tr"
-        }:
-            self.parts.append("\n")
 
     def handle_endtag(self, tag):
-        if tag in {"script", "style", "noscript", "template", "svg"}:
-            if self.skip:
-                self.skip -= 1
-            return
-
-        if self.skip:
-            return
-
-        if tag in {
-            "p", "div", "section", "article", "main", "header",
-            "footer", "nav", "li", "h1", "h2", "h3", "h4",
-            "h5", "h6", "tr"
-        }:
-            self.parts.append("\n")
+        if tag.lower() in {"script", "style", "noscript"} and self.skip:
+            self.skip -= 1
 
     def handle_data(self, data):
         if not self.skip:
-            self.parts.append(data)
+            text = data.strip()
+            if text:
+                self.parts.append(text)
 
     def text(self):
-        text = "".join(self.parts)
-        lines = []
+        return "\n".join(self.parts)
 
-        for line in text.splitlines():
-            line = re.sub(r"\s+", " ", line).strip()
-            if line:
-                lines.append(line)
 
-        return "\n".join(lines)
+def get_playwright():
+    try:
+        return importlib.import_module("playwright.sync_api")
+    except ImportError:
+        pass
+
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "playwright"],
+            check=True
+        )
+
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=True
+        )
+
+        return importlib.import_module("playwright.sync_api")
+    except Exception:
+        return None
 
 
 class CommandEngine:
     def __init__(self):
         self.cancel_event = threading.Event()
         self._busy = False
-        self._busy_lock = threading.Lock()
+        self._lock = threading.Lock()
 
     @property
     def busy(self):
-        with self._busy_lock:
+        with self._lock:
             return self._busy
 
     def cancel(self):
@@ -94,139 +88,119 @@ class CommandEngine:
 
     def _start(self):
         self.cancel_event.clear()
-        with self._busy_lock:
+        with self._lock:
             self._busy = True
 
     def _finish(self):
-        with self._busy_lock:
+        with self._lock:
             self._busy = False
 
     def _cancelled(self):
         return self.cancel_event.is_set()
 
     def execute(self, command):
+        command = command.strip()
+
+        if not command:
+            return CommandResult()
+
         self._start()
 
         try:
-            command = command.strip()
-
-            if not command:
-                return CommandResult()
-
-            try:
-                parts = shlex.split(command)
-            except ValueError as e:
-                return CommandResult(str(e), True)
-
+            parts = shlex.split(command)
             name = parts[0].lower()
             args = parts[1:]
 
-            if name == "help":
+            commands = {
+                "help": self._help,
+                "man": self._man,
+                "clear": self._clear,
+                "discord": self._discord,
+                "github": self._github,
+                "request": self._request,
+                "update": self._update,
+                "restart": self._restart,
+                "exit": self._exit,
+            }
+
+            if name not in commands:
                 return CommandResult(
-                    "Commands:\n"
-                    "  help                    Show available commands\n"
-                    "  man <command>          Show command usage\n"
-                    "  clear                   Clear the screen\n"
-                    "  request <url>           Make a GET request\n"
-                    "  request <url> GET       Make a GET request\n"
-                    "  request <url> POST text <body>\n"
-                    "  request <url> POST file <path>\n"
-                    "  request <url> PUT text <body>\n"
-                    "  request <url> PUT file <path>\n"
-                    "  request <url> PATCH text <body>\n"
-                    "  request <url> PATCH file <path>\n"
-                    "  request <url> DELETE    Send a DELETE request\n"
-                    "  discord                 Show the Minzoi Lab Discord\n"
-                    "  github                  Show the Minzoi Lab GitHub\n"
-                    "  update                  Update Hash++\n"
-                    "  restart                 Restart Hash++\n"
-                    "  exit                    Exit Hash++"
+                    f"Unknown command: {name}\nType help to see available commands.",
+                    True
                 )
 
-            if name == "man":
-                return self._man(args)
+            return commands[name](args)
 
-            if name == "clear":
-                return CommandResult("\f")
-
-            if name == "discord":
-                return CommandResult("https://discord.gg/hscSEBa9X")
-
-            if name == "github":
-                return CommandResult("https://github.com/Minzoi-Lab")
-
-            if name == "request":
-                return self._request(args)
-
-            if name == "update":
-                return self._update()
-
-            if name == "restart":
-                return CommandResult(
-                    "Restarting Hash++...",
-                    should_exit=True,
-                    restart=True,
-                    restart_path=os.path.abspath(__file__)
-                )
-
-            if name == "exit":
-                return CommandResult("Goodbye.", should_exit=True)
-
-            return CommandResult(
-                f"Unknown command: {name}\nType help to see available commands.",
-                True
-            )
-
+        except ValueError as e:
+            return CommandResult(f"Error: {e}", True)
+        except Exception as e:
+            return CommandResult(f"Error: {e}", True)
         finally:
             self._finish()
+
+    def _help(self, args):
+        return CommandResult(
+            "Hash++ commands:\n\n"
+            "help              Show this list\n"
+            "man <command>     Show command information\n"
+            "clear             Clear the screen\n"
+            "discord           Show the Minzi Lab Discord\n"
+            "github            Show the Minzi Lab GitHub\n"
+            "request <url>     Make a web request\n"
+            "update            Update Hash++\n"
+            "restart           Restart Hash++\n"
+            "exit              Close Hash++"
+        )
 
     def _man(self, args):
         if not args:
             return CommandResult(
-                "Usage: man <command>\nExample: man request",
+                "Usage: man <command>\n\n"
+                "Try: man request",
                 True
             )
 
         command = args[0].lower()
 
         manuals = {
-            "help":
-                "help\n\nShows the list of available Hash++ commands.",
+            "help": "help\nShow the list of available Hash++ commands.",
 
-            "man":
-                "man <command>\n\nShows the usage information for a command.",
+            "man": "man <command>\n"
+                   "Show information about a Hash++ command.",
 
-            "clear":
-                "clear\n\nClears the current output.",
+            "clear": "clear\n"
+                     "Clear the current Hash++ screen.",
 
-            "discord":
-                "discord\n\nShows the Minzoi Lab Discord invite.",
+            "discord": "discord\n"
+                       "Show the Minzi Lab Discord server.",
 
-            "github":
-                "github\n\nShows the GitHub organisation for Minzoi Lab.",
+            "github": "github\n"
+                      "Show the Minzi Lab GitHub organization.",
 
-            "request":
-                "request <url>\n"
-                "request <url> GET\n"
-                "request <url> POST text <body>\n"
-                "request <url> POST file <path>\n\n"
-                "Makes an HTTP request.\n"
-                "GET is used automatically when no method is provided.\n"
-                "POST, PUT and PATCH can send either text or a file.\n"
-                "DELETE can be used without a body.",
+            "request": "request <url>\n"
+                       "Make a GET request using a JavaScript-enabled browser.\n\n"
+                       "request <url> GET\n"
+                       "Make an explicit GET request.\n\n"
+                       "request <url> POST text <body>\n"
+                       "Send a POST request with text data.\n\n"
+                       "request <url> POST file <path>\n"
+                       "Send a POST request using a file as the body.\n\n"
+                       "PUT and PATCH work the same way.\n\n"
+                       "request <url> DELETE\n"
+                       "Send a DELETE request.",
 
-            "update":
-                "update\n\n"
-                "If Hash++ is inside a Git repository, pulls the latest changes.\n"
-                "If it is not a Git repository, Hash++ clones the Minzoi Lab\n"
-                "Hash++ repository using Git's configured authentication.\n"
-                "Hash++ then restarts using the updated code.",
+            "update": "update\n"
+                      "Update Hash++ from its Git repository.\n\n"
+                      "If Hash++ is already inside a Git repository, "
+                      "that repository is pulled.\n\n"
+                      "Otherwise, the Minzi Lab Hash++ repository is cloned "
+                      "and Hash++ restarts from the new copy.",
 
-            "restart":
-                "restart\n\nRestarts Hash++ through code.py.",
+            "restart": "restart\n"
+                       "Restart Hash++.",
 
-            "exit":
-                "exit\n\nCloses Hash++."
+            "exit": "exit\n"
+                   "Close Hash++."
         }
 
         if command not in manuals:
@@ -234,185 +208,271 @@ class CommandEngine:
 
         return CommandResult(manuals[command])
 
+    def _clear(self, args):
+        return CommandResult("\f")
+
+    def _discord(self, args):
+        return CommandResult("https://discord.gg/hscSEBa9X")
+
+    def _github(self, args):
+        return CommandResult("https://github.com/Minzoi-Lab")
+
     def _request(self, args):
         if not args:
             return CommandResult(
-                "Usage: request <url> [METHOD] [text|file] [body]",
+                "Usage: request <url> [GET|POST|PUT|PATCH|DELETE] ...",
                 True
             )
 
         url = args[0]
-        method = args[1].upper() if len(args) > 1 else "GET"
 
-        allowed = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+        if not re.match(r"^https?://", url, re.IGNORECASE):
+            return CommandResult(
+                "Invalid URL. Use http:// or https://",
+                True
+            )
 
-        if method not in allowed:
-            return CommandResult(f"Unsupported HTTP method: {method}", True)
+        method = "GET"
 
-        body = None
+        if len(args) >= 2:
+            method = args[1].upper()
 
-        if method in {"POST", "PUT", "PATCH"}:
+        if method == "GET":
+            return self._browser_request(url)
+
+        if method == "DELETE":
+            return self._simple_request(url, "DELETE")
+
+        if method not in {"POST", "PUT", "PATCH"}:
+            return CommandResult(
+                f"Unsupported request method: {method}",
+                True
+            )
+
+        if len(args) < 3:
+            return CommandResult(
+                f"Usage: request <url> {method} text <body>\n"
+                f"or: request <url> {method} file <path>",
+                True
+            )
+
+        body_type = args[2].lower()
+
+        if body_type == "text":
             if len(args) < 4:
+                return CommandResult("Missing request body.", True)
+
+            body = " ".join(args[3:]).encode()
+
+        elif body_type == "file":
+            if len(args) != 4:
                 return CommandResult(
-                    f"Usage: request <url> {method} text <body>\n"
-                    f"or: request <url> {method} file <path>",
+                    f"Usage: request <url> {method} file <path>",
                     True
                 )
 
-            body_type = args[2].lower()
+            path = os.path.expanduser(args[3])
 
-            if body_type == "text":
-                body = args[3].encode("utf-8")
-            elif body_type == "file":
-                path = args[3]
-
-                if not os.path.isfile(path):
-                    return CommandResult(f"File not found: {path}", True)
-
-                try:
-                    with open(path, "rb") as file:
-                        body = file.read()
-                except OSError as e:
-                    return CommandResult(f"Could not read file: {e}", True)
-            else:
+            if not os.path.isfile(path):
                 return CommandResult(
-                    "Body type must be either text or file.",
+                    f"File not found: {path}",
                     True
                 )
 
+            try:
+                with open(path, "rb") as f:
+                    body = f.read()
+            except Exception as e:
+                return CommandResult(
+                    f"Could not read file: {e}",
+                    True
+                )
+
+        else:
+            return CommandResult(
+                "Body type must be text or file.",
+                True
+            )
+
+        return self._simple_request(url, method, body)
+
+    def _browser_request(self, url):
         if self._cancelled():
             return CommandResult("Operation cancelled.", True)
 
-        request = urllib.request.Request(
-            url,
-            data=body,
-            method=method
-        )
+        playwright_api = get_playwright()
 
-        if body is not None:
-            if len(args) > 2 and args[2].lower() == "file":
-                extension = os.path.splitext(args[3])[1].lower()
+        if playwright_api is None:
+            return CommandResult(
+                "Could not install Playwright or Chromium.",
+                True
+            )
 
-                if extension == ".json":
-                    request.add_header("Content-Type", "application/json")
-                elif extension in {".txt", ".html", ".htm"}:
-                    request.add_header("Content-Type", "text/plain; charset=utf-8")
-                else:
-                    request.add_header("Content-Type", "application/octet-stream")
-            else:
-                request.add_header("Content-Type", "text/plain; charset=utf-8")
+        browser = None
 
         try:
-            response = urllib.request.urlopen(request, timeout=2)
-
-            status = response.status
-            reason = response.reason
-            content_type = response.headers.get_content_type()
-
-            data = bytearray()
-
-            while True:
+            with playwright_api.sync_playwright() as p:
                 if self._cancelled():
-                    try:
-                        response.close()
-                    except Exception:
-                        pass
+                    return CommandResult("Operation cancelled.", True)
+
+                browser = p.chromium.launch(headless=True)
+
+                page = browser.new_page(
+                    java_script_enabled=True,
+                    user_agent=(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/140.0.0.0 Safari/537.36"
+                    )
+                )
+
+                response = page.goto(
+                    url,
+                    wait_until="domcontentloaded",
+                    timeout=15000
+                )
+
+                if self._cancelled():
+                    browser.close()
                     return CommandResult("Operation cancelled.", True)
 
                 try:
-                    chunk = response.read(4096)
-                except socket.timeout:
-                    continue
+                    page.wait_for_load_state(
+                        "networkidle",
+                        timeout=7000
+                    )
+                except Exception:
+                    pass
 
-                if not chunk:
-                    break
+                page.wait_for_timeout(1500)
 
-                data.extend(chunk)
+                if self._cancelled():
+                    browser.close()
+                    return CommandResult("Operation cancelled.", True)
 
-                if len(data) >= 2 * 1024 * 1024:
-                    break
+                status = response.status if response else 0
+                final_url = page.url
 
-            response.close()
+                try:
+                    title = page.title()
+                except Exception:
+                    title = ""
 
-            output = self._format_response(
-                bytes(data),
-                content_type
-            )
+                try:
+                    text = page.locator("body").inner_text(
+                        timeout=5000
+                    ).strip()
+                except Exception:
+                    text = ""
 
-            if len(data) >= 2 * 1024 * 1024:
-                output += "\n\n[Response truncated after 2 MB.]"
+                browser.close()
+
+                if not text:
+                    text = "(No readable page content)"
+
+                output = f"Status: {status}"
+
+                if title:
+                    output += f"\nTitle: {title}"
+
+                if final_url != url:
+                    output += f"\nURL: {final_url}"
+
+                output += f"\n\n{text}"
+
+                return CommandResult(output)
+
+        except Exception as e:
+            if browser:
+                try:
+                    browser.close()
+                except Exception:
+                    pass
 
             return CommandResult(
-                f"Status: {status} {reason}\n\n{output}".strip(),
-                is_error=status >= 400
+                f"Request failed: {e}",
+                True
+            )
+
+    def _simple_request(self, url, method, body=None):
+        if self._cancelled():
+            return CommandResult("Operation cancelled.", True)
+
+        try:
+            request = urllib.request.Request(
+                url,
+                data=body,
+                method=method,
+                headers={
+                    "User-Agent": "Hash++"
+                }
+            )
+
+            with urllib.request.urlopen(request, timeout=15) as response:
+                status = response.status
+                reason = response.reason
+                content_type = response.headers.get(
+                    "Content-Type",
+                    ""
+                )
+                data = response.read()
+
+            if self._cancelled():
+                return CommandResult("Operation cancelled.", True)
+
+            text = data.decode("utf-8", errors="replace")
+
+            if "application/json" in content_type:
+                try:
+                    parsed = json.loads(text)
+                    text = json.dumps(
+                        parsed,
+                        indent=2,
+                        ensure_ascii=False
+                    )
+                except Exception:
+                    pass
+
+            elif "text/html" in content_type:
+                parser = HTMLTextParser()
+                parser.feed(text)
+                text = parser.text()
+
+            return CommandResult(
+                f"Status: {status} {reason}\n\n{text}"
             )
 
         except urllib.error.HTTPError as e:
-            if self._cancelled():
-                return CommandResult("Operation cancelled.", True)
-
             try:
-                data = e.read()
+                data = e.read().decode(
+                    "utf-8",
+                    errors="replace"
+                )
             except Exception:
-                data = b""
+                data = ""
 
-            content_type = e.headers.get_content_type() if e.headers else ""
-
-            output = self._format_response(data, content_type)
-
-            text = f"Status: {e.code} {e.reason}"
-
-            if output:
-                text += f"\n\n{output}"
-
-            return CommandResult(text, True)
+            return CommandResult(
+                f"Status: {e.code} {e.reason}\n\n{data}",
+                True
+            )
 
         except urllib.error.URLError as e:
-            if self._cancelled():
-                return CommandResult("Operation cancelled.", True)
-
-            reason = e.reason
-
-            if isinstance(reason, socket.timeout):
-                return CommandResult("Request timed out.", True)
-
-            return CommandResult(f"Request failed: {reason}", True)
+            return CommandResult(
+                f"Request failed: {e.reason}",
+                True
+            )
 
         except socket.timeout:
-            return CommandResult("Request timed out.", True)
+            return CommandResult(
+                "Request timed out.",
+                True
+            )
 
         except Exception as e:
-            if self._cancelled():
-                return CommandResult("Operation cancelled.", True)
-
-            return CommandResult(f"Request failed: {e}", True)
-
-    def _format_response(self, data, content_type):
-        if not data:
-            return "(No response body)"
-
-        text = data.decode("utf-8", errors="replace")
-
-        if "json" in content_type.lower():
-            try:
-                parsed = json.loads(text)
-                return json.dumps(parsed, indent=2, ensure_ascii=False)
-            except json.JSONDecodeError:
-                pass
-
-        if "html" in content_type.lower() or "<html" in text.lower():
-            parser = HTMLTextParser()
-
-            try:
-                parser.feed(text)
-                readable = parser.text()
-
-                if readable:
-                    return readable
-            except Exception:
-                pass
-
-        return text
+            return CommandResult(
+                f"Request failed: {e}",
+                True
+            )
 
     def _is_git_repo(self, folder):
         try:
@@ -429,217 +489,262 @@ class CommandEngine:
                 text=True
             )
 
-            return result.returncode == 0 and result.stdout.strip() == "true"
+            return result.returncode == 0
+        except Exception:
+            return False
 
-        except FileNotFoundError:
-            return None
+    def _run_process(self, command, cwd=None):
+        process = None
+        output = []
 
-    def _run_process(self, args, cwd):
         try:
             process = subprocess.Popen(
-                args,
+                command,
                 cwd=cwd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                encoding="utf-8",
-                errors="replace"
+                bufsize=1
             )
-        except FileNotFoundError:
-            return -1, "Git is not installed."
 
-        output = []
+            def read_output():
+                for line in process.stdout:
+                    output.append(line)
 
-        def read_output():
-            try:
-                text = process.stdout.read()
-                if text:
-                    output.append(text)
-            except Exception:
-                pass
+            reader = threading.Thread(
+                target=read_output,
+                daemon=True
+            )
+            reader.start()
 
-        reader = threading.Thread(target=read_output, daemon=True)
-        reader.start()
-
-        while process.poll() is None:
-            if self._cancelled():
-                try:
+            while process.poll() is None:
+                if self._cancelled():
                     process.terminate()
+
+                    try:
+                        process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+
+                    return False, "".join(output)
+
+                time.sleep(0.1)
+
+            reader.join(timeout=1)
+
+            return process.returncode == 0, "".join(output)
+
+        except FileNotFoundError:
+            return False, "Git is not installed or could not be found."
+
+        except Exception as e:
+            if process:
+                try:
+                    process.kill()
                 except Exception:
                     pass
 
-                try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    try:
-                        process.kill()
-                    except Exception:
-                        pass
+            return False, str(e)
 
-                reader.join(timeout=1)
-                return -2, "Operation cancelled."
+    def _update(self, args):
+        current = os.path.dirname(
+            os.path.abspath(__file__)
+        )
 
-            time.sleep(0.1)
-
-        reader.join(timeout=1)
-
-        return process.returncode, "".join(output).strip()
-
-    def _update(self):
-        folder = os.path.dirname(os.path.abspath(__file__))
-        git_state = self._is_git_repo(folder)
-
-        if git_state is None:
-            return CommandResult("Git is not installed.", True)
-
-        if self._cancelled():
-            return CommandResult("Operation cancelled.", True)
-
-        if git_state:
-            return_code, output = self._run_process(
-                ["git", "pull"],
-                folder
+        if self._is_git_repo(current):
+            success, output = self._run_process(
+                ["git", "-C", current, "pull"]
             )
 
-            if return_code == -2:
-                return CommandResult(output, True)
-
-            if return_code != 0:
-                lowered = output.lower()
-
-                if (
-                    "authentication failed" in lowered
-                    or "could not read username" in lowered
-                    or "invalid username or password" in lowered
-                    or "permission denied" in lowered
-                ):
-                    return CommandResult("Auth failed.", True)
-
-                if (
-                    "repository not found" in lowered
-                    or "not found" in lowered
-                    or "access denied" in lowered
-                ):
-                    return CommandResult("No access.", True)
-
+            if self._cancelled():
                 return CommandResult(
-                    output or "Git pull failed.",
+                    "Update cancelled.",
                     True
                 )
 
-            return CommandResult(
-                output or "Already up to date.",
-                should_exit=True,
-                restart=True,
-                restart_path=os.path.abspath(__file__)
-            )
-
-        parent = os.path.dirname(folder)
-        current_name = os.path.basename(folder)
-
-        if current_name.lower() == "hashhashplus":
-            target = os.path.join(parent, "hashhashplus-update")
-        else:
-            target = os.path.join(parent, "hashhashplus")
-
-        if os.path.exists(target):
-            target_git = self._is_git_repo(target)
-
-            if target_git is None:
-                return CommandResult("Git is not installed.", True)
-
-            if not target_git:
-                return CommandResult(
-                    f"Cannot clone into existing folder:\n{target}",
-                    True
-                )
-
-            return_code, output = self._run_process(
-                ["git", "pull"],
-                target
-            )
-
-        else:
-            return_code, output = self._run_process(
-                ["git", "clone", GITHUB_REPO, target],
-                parent
-            )
-
-        if return_code == -2:
-            return CommandResult(output, True)
-
-        if return_code != 0:
-            lowered = output.lower()
+            lower = output.lower()
 
             if (
-                "authentication failed" in lowered
-                or "could not read username" in lowered
-                or "invalid username or password" in lowered
-                or "permission denied" in lowered
+                "authentication failed" in lower
+                or "could not read username" in lower
+                or "invalid username" in lower
+                or "terminal prompts disabled" in lower
             ):
                 return CommandResult("Auth failed.", True)
 
             if (
-                "repository not found" in lowered
-                or "not found" in lowered
-                or "access denied" in lowered
+                "repository not found" in lower
+                or "access denied" in lower
+                or "does not exist" in lower
+                or "not found" in lower
             ):
                 return CommandResult("No access.", True)
 
+            if not success:
+                return CommandResult(
+                    output.strip() or "Update failed.",
+                    True
+                )
+
             return CommandResult(
-                output or "Update failed.",
+                output.strip() or "Already up to date."
+            )
+
+        parent = os.path.dirname(current)
+        current_name = os.path.basename(current)
+
+        if current_name.lower() == "hashhashplus":
+            target = os.path.join(
+                parent,
+                "hashhashplus-update"
+            )
+        else:
+            target = os.path.join(
+                parent,
+                "hashhashplus"
+            )
+
+        if os.path.exists(target):
+            if self._is_git_repo(target):
+                success, output = self._run_process(
+                    ["git", "-C", target, "pull"]
+                )
+            else:
+                return CommandResult(
+                    f"Cannot update because {target} already exists "
+                    "and is not a Git repository.",
+                    True
+                )
+        else:
+            success, output = self._run_process(
+                ["git", "clone", GITHUB_REPO, target]
+            )
+
+        if self._cancelled():
+            return CommandResult(
+                "Update cancelled.",
                 True
             )
 
-        restart_path = os.path.join(target, "code.py")
+        lower = output.lower()
 
-        if not os.path.isfile(restart_path):
+        if (
+            "authentication failed" in lower
+            or "could not read username" in lower
+            or "invalid username" in lower
+            or "terminal prompts disabled" in lower
+        ):
+            return CommandResult("Auth failed.", True)
+
+        if (
+            "repository not found" in lower
+            or "access denied" in lower
+            or "does not exist" in lower
+            or "not found" in lower
+        ):
+            return CommandResult("No access.", True)
+
+        if not success:
             return CommandResult(
-                "Update succeeded, but code.py was not found.",
+                output.strip() or "Update failed.",
+                True
+            )
+
+        new_code = os.path.join(target, "code.py")
+
+        if not os.path.isfile(new_code):
+            return CommandResult(
+                "Update completed, but code.py was not found.",
                 True
             )
 
         return CommandResult(
-            output or "Update complete.",
+            "Update complete. Restarting...",
+            restart=True,
+            should_exit=True,
+            restart_path=new_code
+        )
+
+    def _restart(self, args):
+        path = os.path.abspath(__file__)
+
+        return CommandResult(
+            "Restarting...",
             should_exit=True,
             restart=True,
-            restart_path=restart_path
+            restart_path=path
+        )
+
+    def _exit(self, args):
+        return CommandResult(
+            "Goodbye.",
+            should_exit=True
         )
 
 
 def run():
-    folder = os.path.dirname(os.path.abspath(__file__))
-
-    if os.name != "nt" and not (
-        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
-    ):
-        subprocess.call([sys.executable, os.path.join(folder, "text.py")])
-        return
-
     print("Hash++")
     print()
-    print("How do you want to use Hash++?")
-    print("  1. UI")
-    print("  2. In-terminal")
-    print("  3. IDE")
-    print("  4. Exit")
+
+    if sys.platform.startswith("linux"):
+        if not os.environ.get("DISPLAY") and not os.environ.get(
+            "WAYLAND_DISPLAY"
+        ):
+            text_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "text.py"
+            )
+
+            os.execv(
+                sys.executable,
+                [sys.executable, text_path]
+            )
+
+    print("1. UI")
+    print("2. In-terminal")
+    print("3. IDE")
+    print("4. Exit")
     print()
 
-    choice = input("Type in a choice: ")
+    while True:
+        try:
+            choice = input("> ").strip()
 
-    if choice == "1":
-        subprocess.Popen(
-            [sys.executable, os.path.join(folder, "gui.py")],
-            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
-        )
-    elif choice == "2":
-        subprocess.call([sys.executable, os.path.join(folder, "text.py")])
-    elif choice == "3":
-        print("Coming soon..")
-    elif choice == "4":
-        return
-    else:
-        print("Not a valid choice, closing..")
+            if choice == "1":
+                gui_path = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    "gui.py"
+                )
+
+                subprocess.Popen(
+                    [sys.executable, gui_path]
+                )
+
+                return
+
+            if choice == "2":
+                text_path = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)),
+                    "text.py"
+                )
+
+                os.execv(
+                    sys.executable,
+                    [sys.executable, text_path]
+                )
+
+            if choice == "3":
+                print("Coming soon..")
+                return
+
+            if choice == "4":
+                return
+
+            print("Please choose 1, 2, 3, or 4.")
+
+        except KeyboardInterrupt:
+            print()
+            return
 
 
 if __name__ == "__main__":
