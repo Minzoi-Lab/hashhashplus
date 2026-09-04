@@ -3,7 +3,7 @@ Main Developer: Yuri (Nikodem6789)
 
 
 # hashhashplus
-V1.4
+V1.5
 - Private
 
 Python required!
