@@ -88,6 +88,7 @@ class CommandEngine:
 
     def _start(self):
         self.cancel_event.clear()
+
         with self._lock:
             self._busy = True
 
@@ -125,7 +126,8 @@ class CommandEngine:
 
             if name not in commands:
                 return CommandResult(
-                    f"Unknown command: {name}\nType help to see available commands.",
+                    f"Unknown command: {name}\n"
+                    "Type help to see available commands.",
                     True
                 )
 
@@ -133,8 +135,10 @@ class CommandEngine:
 
         except ValueError as e:
             return CommandResult(f"Error: {e}", True)
+
         except Exception as e:
             return CommandResult(f"Error: {e}", True)
+
         finally:
             self._finish()
 
@@ -163,30 +167,57 @@ class CommandEngine:
         command = args[0].lower()
 
         manuals = {
-            "help": "help\nShow the list of available Hash++ commands.",
-            "man": "man <command>\nShow information about a Hash++ command.",
-            "clear": "clear\nClear the current Hash++ screen.",
-            "discord": "discord\nShow the Minzi Lab Discord server.",
-            "github": "github\nShow the Minzi Lab GitHub organization.",
-            "request": "request <url>\n"
-                       "Make a GET request using a JavaScript-enabled browser.\n\n"
-                       "request <url> GET\n"
-                       "Make an explicit GET request.\n\n"
-                       "request <url> POST text <body>\n"
-                       "Send a POST request with text data.\n\n"
-                       "request <url> POST file <path>\n"
-                       "Send a POST request using a file as the body.\n\n"
-                       "PUT and PATCH work the same way.\n\n"
-                       "request <url> DELETE\n"
-                       "Send a DELETE request.",
-            "update": "update\n"
-                      "Update Hash++ from its Git repository.",
-            "restart": "restart\nRestart Hash++.",
-            "exit": "exit\nClose Hash++."
+            "help":
+                "help\n"
+                "Show the list of available Hash++ commands.",
+
+            "man":
+                "man <command>\n"
+                "Show information about a Hash++ command.",
+
+            "clear":
+                "clear\n"
+                "Clear the current Hash++ screen.",
+
+            "discord":
+                "discord\n"
+                "Show the Minzi Lab Discord server.",
+
+            "github":
+                "github\n"
+                "Show the Minzi Lab GitHub organization.",
+
+            "request":
+                "request <url>\n"
+                "Make a GET request using a JavaScript-enabled browser.\n\n"
+                "request <url> GET\n"
+                "Make an explicit GET request.\n\n"
+                "request <url> POST text <body>\n"
+                "Send a POST request with text data.\n\n"
+                "request <url> POST file <path>\n"
+                "Send a POST request using a file as the body.\n\n"
+                "PUT and PATCH work the same way.\n\n"
+                "request <url> DELETE\n"
+                "Send a DELETE request.",
+
+            "update":
+                "update\n"
+                "Update Hash++ from its Git repository.",
+
+            "restart":
+                "restart\n"
+                "Restart Hash++.",
+
+            "exit":
+                "exit\n"
+                "Close Hash++."
         }
 
         if command not in manuals:
-            return CommandResult(f"No manual entry for: {command}", True)
+            return CommandResult(
+                f"No manual entry for: {command}",
+                True
+            )
 
         return CommandResult(manuals[command])
 
@@ -197,12 +228,12 @@ class CommandEngine:
         return CommandResult("https://discord.gg/hscSEBa9X")
 
     def _github(self, args):
-        return CommandResult("https://github.com/Minzi-Lab")
+        return CommandResult("https://github.com/Minzoi-Lab")
 
     def _request(self, args):
         if not args:
             return CommandResult(
-                "Usage: request <url> [GET|POST|PUT|PATCH|DELETE] ...",
+                "Usage: request <url> [GET|POST|PUT|PATCH|DELETE]",
                 True
             )
 
@@ -239,7 +270,10 @@ class CommandEngine:
 
         if body_type == "text":
             if len(args) < 4:
-                return CommandResult("Missing request body.", True)
+                return CommandResult(
+                    "Missing request body.",
+                    True
+                )
 
             body = " ".join(args[3:]).encode()
 
@@ -266,6 +300,7 @@ class CommandEngine:
                     f"Could not read file: {e}",
                     True
                 )
+
         else:
             return CommandResult(
                 "Body type must be text or file.",
@@ -276,7 +311,10 @@ class CommandEngine:
 
     def _browser_request(self, url):
         if self._cancelled():
-            return CommandResult("Operation cancelled.", True)
+            return CommandResult(
+                "Operation cancelled.",
+                True
+            )
 
         playwright_api = get_playwright()
 
@@ -289,7 +327,10 @@ class CommandEngine:
         try:
             with playwright_api.sync_playwright() as p:
                 if self._cancelled():
-                    return CommandResult("Operation cancelled.", True)
+                    return CommandResult(
+                        "Operation cancelled.",
+                        True
+                    )
 
                 browser = p.chromium.launch(headless=True)
 
@@ -320,7 +361,11 @@ class CommandEngine:
 
                 if self._cancelled():
                     browser.close()
-                    return CommandResult("Operation cancelled.", True)
+
+                    return CommandResult(
+                        "Operation cancelled.",
+                        True
+                    )
 
                 status = response.status if response else 0
                 final_url = page.url
@@ -362,7 +407,10 @@ class CommandEngine:
 
     def _simple_request(self, url, method, body=None):
         if self._cancelled():
-            return CommandResult("Operation cancelled.", True)
+            return CommandResult(
+                "Operation cancelled.",
+                True
+            )
 
         try:
             request = urllib.request.Request(
@@ -372,7 +420,10 @@ class CommandEngine:
                 headers={"User-Agent": "Hash++"}
             )
 
-            with urllib.request.urlopen(request, timeout=15) as response:
+            with urllib.request.urlopen(
+                request,
+                timeout=15
+            ) as response:
                 status = response.status
                 reason = response.reason
                 content_type = response.headers.get(
@@ -382,13 +433,20 @@ class CommandEngine:
                 data = response.read()
 
             if self._cancelled():
-                return CommandResult("Operation cancelled.", True)
+                return CommandResult(
+                    "Operation cancelled.",
+                    True
+                )
 
-            text = data.decode("utf-8", errors="replace")
+            text = data.decode(
+                "utf-8",
+                errors="replace"
+            )
 
             if "application/json" in content_type:
                 try:
                     parsed = json.loads(text)
+
                     text = json.dumps(
                         parsed,
                         indent=2,
@@ -419,7 +477,10 @@ class CommandEngine:
             )
 
         except socket.timeout:
-            return CommandResult("Request timed out.", True)
+            return CommandResult(
+                "Request timed out.",
+                True
+            )
 
         except Exception as e:
             return CommandResult(
@@ -443,6 +504,7 @@ class CommandEngine:
             )
 
             return result.returncode == 0
+
         except Exception:
             return False
 
@@ -468,6 +530,7 @@ class CommandEngine:
                 target=read_output,
                 daemon=True
             )
+
             reader.start()
 
             while process.poll() is None:
@@ -485,10 +548,16 @@ class CommandEngine:
 
             reader.join(timeout=1)
 
-            return process.returncode == 0, "".join(output)
+            return (
+                process.returncode == 0,
+                "".join(output)
+            )
 
         except FileNotFoundError:
-            return False, "Git is not installed or could not be found."
+            return (
+                False,
+                "Git is not installed or could not be found."
+            )
 
         except Exception as e:
             if process:
@@ -507,6 +576,7 @@ class CommandEngine:
             or "could not read username" in lower
             or "invalid username" in lower
             or "terminal prompts disabled" in lower
+            or "401" in lower
         ):
             return "Auth failed."
 
@@ -514,6 +584,7 @@ class CommandEngine:
             "repository not found" in lower
             or "access denied" in lower
             or "does not exist" in lower
+            or "403" in lower
         ):
             return "No access."
 
@@ -538,7 +609,10 @@ class CommandEngine:
             git_error = self._git_error(output)
 
             if git_error:
-                return CommandResult(git_error, True)
+                return CommandResult(
+                    git_error,
+                    True
+                )
 
             if not success:
                 return CommandResult(
@@ -550,7 +624,10 @@ class CommandEngine:
                 "Update complete. Restarting...",
                 should_exit=True,
                 restart=True,
-                restart_path=os.path.join(current, "code.py")
+                restart_path=os.path.join(
+                    current,
+                    "code.py"
+                )
             )
 
         parent = os.path.dirname(current)
@@ -578,9 +655,15 @@ class CommandEngine:
                     "and is not a Git repository.",
                     True
                 )
+
         else:
             success, output = self._run_process(
-                ["git", "clone", GITHUB_REPO, target]
+                [
+                    "git",
+                    "clone",
+                    GITHUB_REPO,
+                    target
+                ]
             )
 
         if self._cancelled():
@@ -592,7 +675,10 @@ class CommandEngine:
         git_error = self._git_error(output)
 
         if git_error:
-            return CommandResult(git_error, True)
+            return CommandResult(
+                git_error,
+                True
+            )
 
         if not success:
             return CommandResult(
@@ -600,7 +686,10 @@ class CommandEngine:
                 True
             )
 
-        new_code = os.path.join(target, "code.py")
+        new_code = os.path.join(
+            target,
+            "code.py"
+        )
 
         if not os.path.isfile(new_code):
             return CommandResult(
@@ -630,54 +719,32 @@ class CommandEngine:
         )
 
 
-def launch_restart(path):
-    path = os.path.abspath(path)
-
-    if not os.path.isfile(path):
-        return False
-
-    if os.name == "nt":
-        creationflags = (
-            subprocess.CREATE_NEW_PROCESS_GROUP
-            | subprocess.DETACHED_PROCESS
-            | subprocess.CREATE_NO_WINDOW
-        )
-
-        subprocess.Popen(
-            [sys.executable, path],
-            cwd=os.path.dirname(path),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=creationflags
-        )
-    else:
-        subprocess.Popen(
-            [sys.executable, path],
-            cwd=os.path.dirname(path),
-            start_new_session=True
-        )
-
-    return True
-
-
 def run():
     print("Hash++")
     print()
+
+    base = os.path.dirname(
+        os.path.abspath(__file__)
+    )
 
     if sys.platform.startswith("linux"):
         if not os.environ.get("DISPLAY") and not os.environ.get(
             "WAYLAND_DISPLAY"
         ):
             text_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
+                base,
                 "text.py"
             )
 
             os.execv(
                 sys.executable,
-                [sys.executable, text_path]
+                [
+                    sys.executable,
+                    text_path
+                ]
             )
+
+            return
 
     print("1. UI")
     print("2. In-terminal")
@@ -691,27 +758,35 @@ def run():
 
             if choice == "1":
                 gui_path = os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)),
+                    base,
                     "gui.py"
                 )
 
                 subprocess.Popen(
-                    [sys.executable, gui_path],
-                    cwd=os.path.dirname(gui_path)
+                    [
+                        sys.executable,
+                        gui_path
+                    ],
+                    cwd=base
                 )
 
                 return
 
             if choice == "2":
                 text_path = os.path.join(
-                    os.path.dirname(os.path.abspath(__file__)),
+                    base,
                     "text.py"
                 )
 
                 os.execv(
                     sys.executable,
-                    [sys.executable, text_path]
+                    [
+                        sys.executable,
+                        text_path
+                    ]
                 )
+
+                return
 
             if choice == "3":
                 print("Coming soon..")
