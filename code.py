@@ -16,18 +16,25 @@ print("  3. IDE")
 print("  4. Exit")
 print()
 
-choice = input("Type in a choice.")
+choice = input("Type in a choice: ")
 
 if choice == "1":
-    subprocess.Popen(
-        [sys.executable, "gui.py"],
-        creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
-    )
+    if os.name == "nt":
+        subprocess.Popen(
+            [sys.executable, "gui.py"],
+            creationflags=subprocess.CREATE_NEW_CONSOLE
+        )
+    else:
+        subprocess.Popen([sys.executable, "gui.py"])
+
 elif choice == "2":
     subprocess.run([sys.executable, "text.py"])
+
 elif choice == "3":
-	print("Coming soon..")
+    print("Coming soon..")
+
 elif choice == "4":
-	exit()
+    sys.exit()
+
 else:
-	print("Not a valid choice, closing..")
+    print("Not a valid choice, closing..")
