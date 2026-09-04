@@ -732,25 +732,18 @@ def run_text(text_path):
     env["HASHPP_RESULT_FILE"] = result_file
 
     process = subprocess.Popen(
-        [
-            sys.executable,
-            text_path
-        ],
+        [sys.executable, text_path],
         cwd=os.path.dirname(text_path),
         env=env
     )
 
     process.wait()
 
-    if not os.path.isfile(result_file):
+    if not os.path.exists(result_file):
         return
 
     try:
-        with open(
-            result_file,
-            "r",
-            encoding="utf-8"
-        ) as f:
+        with open(result_file, "r", encoding="utf-8") as f:
             restart_path = f.read().strip()
     except Exception:
         restart_path = ""
@@ -760,14 +753,14 @@ def run_text(text_path):
     except FileNotFoundError:
         pass
 
-    if restart_path and os.path.isfile(restart_path):
-        subprocess.Popen(
-            [
-                sys.executable,
-                restart_path
-            ],
-            cwd=os.path.dirname(restart_path)
-        )
+    if restart_path:
+        restart_path = os.path.abspath(restart_path)
+
+        if os.path.isfile(restart_path):
+            subprocess.Popen(
+                [sys.executable, restart_path],
+                cwd=os.path.dirname(restart_path)
+            )
 
 
 def run():
