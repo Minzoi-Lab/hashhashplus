@@ -164,19 +164,10 @@ class CommandEngine:
 
         manuals = {
             "help": "help\nShow the list of available Hash++ commands.",
-
-            "man": "man <command>\n"
-                   "Show information about a Hash++ command.",
-
-            "clear": "clear\n"
-                     "Clear the current Hash++ screen.",
-
-            "discord": "discord\n"
-                       "Show the Minzi Lab Discord server.",
-
-            "github": "github\n"
-                      "Show the Minzi Lab GitHub organization.",
-
+            "man": "man <command>\nShow information about a Hash++ command.",
+            "clear": "clear\nClear the current Hash++ screen.",
+            "discord": "discord\nShow the Minzi Lab Discord server.",
+            "github": "github\nShow the Minzi Lab GitHub organization.",
             "request": "request <url>\n"
                        "Make a GET request using a JavaScript-enabled browser.\n\n"
                        "request <url> GET\n"
@@ -188,19 +179,10 @@ class CommandEngine:
                        "PUT and PATCH work the same way.\n\n"
                        "request <url> DELETE\n"
                        "Send a DELETE request.",
-
             "update": "update\n"
-                      "Update Hash++ from its Git repository.\n\n"
-                      "If Hash++ is already inside a Git repository, "
-                      "that repository is pulled.\n\n"
-                      "Otherwise, the Minzi Lab Hash++ repository is cloned "
-                      "and Hash++ restarts from the new copy.",
-
-            "restart": "restart\n"
-                       "Restart Hash++.",
-
-            "exit": "exit\n"
-                   "Close Hash++."
+                      "Update Hash++ from its Git repository.",
+            "restart": "restart\nRestart Hash++.",
+            "exit": "exit\nClose Hash++."
         }
 
         if command not in manuals:
@@ -215,7 +197,7 @@ class CommandEngine:
         return CommandResult("https://discord.gg/hscSEBa9X")
 
     def _github(self, args):
-        return CommandResult("https://github.com/Minzoi-Lab")
+        return CommandResult("https://github.com/Minzi-Lab")
 
     def _request(self, args):
         if not args:
@@ -232,10 +214,7 @@ class CommandEngine:
                 True
             )
 
-        method = "GET"
-
-        if len(args) >= 2:
-            method = args[1].upper()
+        method = args[1].upper() if len(args) >= 2 else "GET"
 
         if method == "GET":
             return self._browser_request(url)
@@ -287,7 +266,6 @@ class CommandEngine:
                     f"Could not read file: {e}",
                     True
                 )
-
         else:
             return CommandResult(
                 "Body type must be text or file.",
@@ -308,8 +286,6 @@ class CommandEngine:
                 True
             )
 
-        browser = None
-
         try:
             with playwright_api.sync_playwright() as p:
                 if self._cancelled():
@@ -322,19 +298,15 @@ class CommandEngine:
                     user_agent=(
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                         "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/140.0.0.0 Safari/537.36"
+                        "Chrome/151.0.0.0 Safari/537.36"
                     )
                 )
 
                 response = page.goto(
                     url,
                     wait_until="domcontentloaded",
-                    timeout=15000
+                    timeout=20000
                 )
-
-                if self._cancelled():
-                    browser.close()
-                    return CommandResult("Operation cancelled.", True)
 
                 try:
                     page.wait_for_load_state(
@@ -383,12 +355,6 @@ class CommandEngine:
                 return CommandResult(output)
 
         except Exception as e:
-            if browser:
-                try:
-                    browser.close()
-                except Exception:
-                    pass
-
             return CommandResult(
                 f"Request failed: {e}",
                 True
@@ -403,9 +369,7 @@ class CommandEngine:
                 url,
                 data=body,
                 method=method,
-                headers={
-                    "User-Agent": "Hash++"
-                }
+                headers={"User-Agent": "Hash++"}
             )
 
             with urllib.request.urlopen(request, timeout=15) as response:
@@ -443,16 +407,8 @@ class CommandEngine:
             )
 
         except urllib.error.HTTPError as e:
-            try:
-                data = e.read().decode(
-                    "utf-8",
-                    errors="replace"
-                )
-            except Exception:
-                data = ""
-
             return CommandResult(
-                f"Status: {e.code} {e.reason}\n\n{data}",
+                f"Status: {e.code} {e.reason}",
                 True
             )
 
@@ -463,10 +419,7 @@ class CommandEngine:
             )
 
         except socket.timeout:
-            return CommandResult(
-                "Request timed out.",
-                True
-            )
+            return CommandResult("Request timed out.", True)
 
         except Exception as e:
             return CommandResult(
@@ -546,6 +499,26 @@ class CommandEngine:
 
             return False, str(e)
 
+    def _git_error(self, output):
+        lower = output.lower()
+
+        if (
+            "authentication failed" in lower
+            or "could not read username" in lower
+            or "invalid username" in lower
+            or "terminal prompts disabled" in lower
+        ):
+            return "Auth failed."
+
+        if (
+            "repository not found" in lower
+            or "access denied" in lower
+            or "does not exist" in lower
+        ):
+            return "No access."
+
+        return None
+
     def _update(self, args):
         current = os.path.dirname(
             os.path.abspath(__file__)
@@ -562,23 +535,10 @@ class CommandEngine:
                     True
                 )
 
-            lower = output.lower()
+            git_error = self._git_error(output)
 
-            if (
-                "authentication failed" in lower
-                or "could not read username" in lower
-                or "invalid username" in lower
-                or "terminal prompts disabled" in lower
-            ):
-                return CommandResult("Auth failed.", True)
-
-            if (
-                "repository not found" in lower
-                or "access denied" in lower
-                or "does not exist" in lower
-                or "not found" in lower
-            ):
-                return CommandResult("No access.", True)
+            if git_error:
+                return CommandResult(git_error, True)
 
             if not success:
                 return CommandResult(
@@ -587,7 +547,10 @@ class CommandEngine:
                 )
 
             return CommandResult(
-                output.strip() or "Already up to date."
+                "Update complete. Restarting...",
+                should_exit=True,
+                restart=True,
+                restart_path=os.path.join(current, "code.py")
             )
 
         parent = os.path.dirname(current)
@@ -626,23 +589,10 @@ class CommandEngine:
                 True
             )
 
-        lower = output.lower()
+        git_error = self._git_error(output)
 
-        if (
-            "authentication failed" in lower
-            or "could not read username" in lower
-            or "invalid username" in lower
-            or "terminal prompts disabled" in lower
-        ):
-            return CommandResult("Auth failed.", True)
-
-        if (
-            "repository not found" in lower
-            or "access denied" in lower
-            or "does not exist" in lower
-            or "not found" in lower
-        ):
-            return CommandResult("No access.", True)
+        if git_error:
+            return CommandResult(git_error, True)
 
         if not success:
             return CommandResult(
@@ -660,19 +610,17 @@ class CommandEngine:
 
         return CommandResult(
             "Update complete. Restarting...",
-            restart=True,
             should_exit=True,
+            restart=True,
             restart_path=new_code
         )
 
     def _restart(self, args):
-        path = os.path.abspath(__file__)
-
         return CommandResult(
             "Restarting...",
             should_exit=True,
             restart=True,
-            restart_path=path
+            restart_path=os.path.abspath(__file__)
         )
 
     def _exit(self, args):
@@ -680,6 +628,37 @@ class CommandEngine:
             "Goodbye.",
             should_exit=True
         )
+
+
+def launch_restart(path):
+    path = os.path.abspath(path)
+
+    if not os.path.isfile(path):
+        return False
+
+    if os.name == "nt":
+        creationflags = (
+            subprocess.CREATE_NEW_PROCESS_GROUP
+            | subprocess.DETACHED_PROCESS
+            | subprocess.CREATE_NO_WINDOW
+        )
+
+        subprocess.Popen(
+            [sys.executable, path],
+            cwd=os.path.dirname(path),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creationflags
+        )
+    else:
+        subprocess.Popen(
+            [sys.executable, path],
+            cwd=os.path.dirname(path),
+            start_new_session=True
+        )
+
+    return True
 
 
 def run():
@@ -717,7 +696,8 @@ def run():
                 )
 
                 subprocess.Popen(
-                    [sys.executable, gui_path]
+                    [sys.executable, gui_path],
+                    cwd=os.path.dirname(gui_path)
                 )
 
                 return
